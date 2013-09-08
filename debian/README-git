@@ -1,0 +1,4 @@
+This branch is for development of the common parts of all Debian-based
+packaging. It should never be used to actually build a package directly, instead
+the 'flavour-distro' branches should be used.
+
