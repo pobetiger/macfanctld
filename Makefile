@@ -5,7 +5,7 @@
 #
 
 CC = gcc
-CFLAGS = -Wall
+CFLAGS += -Wall
 SBIN_DIR = $(DESTDIR)/usr/sbin
 ETC_DIR = $(DESTDIR)/etc
 
