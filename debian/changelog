@@ -1,5 +1,5 @@
-macfanctld (0.6-1~raring) raring; urgency=low
+macfanctld (0.7.detly-1~raring) raring; urgency=low
 
-  * Repackaging.
+  * Repackaging and including patches.
 
  -- Jason Heeris <jason.heeris@gmail.com>  Sun, 08 Sep 2013 18:26:23 +0800
