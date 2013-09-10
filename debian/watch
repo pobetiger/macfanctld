@@ -1,0 +1,2 @@
+version=2
+https://github.com/detly/macfanctld/releases .*/v?(.+)\.tar\.gz
