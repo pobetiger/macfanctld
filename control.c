@@ -260,7 +260,7 @@ void calc_fan()
 	float fan_max_speed =temp_max_fan_min + (normalized_temp * temp_max_fan_window);
 	if(fan_max_speed > fan_speed)
 	{
-		fan_speed = fan_avg_speed;
+		fan_speed = fan_max_speed;
 		fan_ctl = CTL_MAX;
 	}
 
