@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
 		if(strcmp(argv[i], "-f") == 0)
 		{
 			daemon = 0;
-		}
+		}		
 		else
 		{
 			usage();
@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 			reload = 0;
 		}
 
-		sleep(5);
+		sleep(update_time);
 	}
 
 	// close pid file and delete it

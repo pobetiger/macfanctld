@@ -29,6 +29,8 @@ extern float temp_TG0P_ceiling;
 extern float fan_min;
 extern float fan_max;
 
+extern int update_time;
+
 extern int log_level;
 
 void read_cfg(char* name);
@@ -36,7 +38,7 @@ void read_cfg(char* name);
 #define MAX_EXCLUDE		20
 extern int exclude[MAX_EXCLUDE];	// array of sensors to exclude
 
-#define max(a,b)	(a > b ? a : b)
-#define min(a,b)	(a < b ? a : b)
+#define max(a,b)	((a) > (b) ? (a) : (b))
+#define min(a,b)	((a) < (b) ? (a) : (b))
 
 #endif /* CONFIG_H_ */
