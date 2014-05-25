@@ -1,11 +1,5 @@
-macfanctld (0.7.detly-2~saucy) saucy; urgency=low
+macfanctld (0.7.detly-2~trusty) trusty; urgency=low
 
-  * Fixed missing init script
+  * Packaged for Ubuntu 14.04 (Trusty)
 
- -- Jason Heeris <jason.heeris@gmail.com>  Sat, 12 Oct 2013 21:58:00 +0800
-
-macfanctld (0.7.detly-1~saucy) saucy; urgency=low
-
-  * Repackaging and including patches.
-
- -- Jason Heeris <jason.heeris@gmail.com>  Sun, 08 Sep 2013 18:26:23 +0800
+ -- Jason Heeris <jason.heeris@gmail.com>  Sun, 25 May 2014 18:29:00 +1000
