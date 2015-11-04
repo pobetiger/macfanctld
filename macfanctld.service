@@ -1,0 +1,10 @@
+[Unit]
+Description=Fan control daemon for MacBook
+Documentation=man:macfanctld(1)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/macfanctld -f
+
+[Install]
+WantedBy=multi-user.target
