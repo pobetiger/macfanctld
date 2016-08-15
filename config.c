@@ -102,12 +102,18 @@ int read_param(char* name, int min_val, int max_val, int def)
 
 	while(1)
 	{
-		char buf[64];
+		char buf[256]; /* TODO: long lines not handled properly this way */
 		char *s = fgets(buf, sizeof(buf), fp);
+
 
 		if(s == NULL)
 		{
 			break;						// exit when no more to read
+		}
+
+		if (buf[255] != '\n') 
+		{
+			printf("warning, long lines found, please fix config file\n");
 		}
 
 		if(buf[0] == '#' || buf[0] == '\n')
@@ -160,6 +166,11 @@ void read_exclude_list()
 		if(s == NULL)
 		{
 			break;						// exit when no more to read
+		}
+
+		if (buf[255] != '\n') 
+		{
+			printf("warning, long lines found, please fix config file\n");
 		}
 
 		if(buf[0] == '#' || buf[0] == '\n')
