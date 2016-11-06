@@ -40,6 +40,8 @@ int log_level = 0;
 
 int exclude[MAX_EXCLUDE];		// array of sensors to exclude
 
+int update_time = 5;
+
 //-----------------------------------------------------------------------------
 
 int match(char* name, char* buf)
@@ -254,6 +256,8 @@ void read_cfg(char* name)
 		fan_min = read_param("fan_min", 0, 6200, 0);
 
 		log_level = read_param("log_level", 0, 2, 0);
+
+		update_time = read_param("update_time",1,30,5);
 		
 		read_exclude_list();
 
@@ -276,6 +280,8 @@ void read_cfg(char* name)
 	printf("\ttemp_TG0P_ceiling: %.0f\n", temp_TG0P_ceiling);
 
 	printf("\tfan_min: %.0f\n", fan_min);
+
+	printf("\tupdate_time: %d\n", update_time);
 
 	if(exclude[0] != 0)
 	{
