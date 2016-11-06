@@ -445,10 +445,8 @@ void scan_sensors()
 			sensors[i].excluded = 0;
 			sprintf(sensors[i].fname, "%s/temp%d_input", base_path, sensors[i].id);
 
-			for(j = 0; j < MAX_EXCLUDE && exclude[j] != 0; ++j)
-			{
-				if(exclude[j] == sensors[i].id)
-				{
+			for (j=0; j<exclude_cnt; j++) {
+				if (exclude_list[j] == sensors[i].id) {
 					sensors[i].excluded = 1;
 					break;
 				}

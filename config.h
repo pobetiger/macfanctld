@@ -17,6 +17,26 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
+typedef int bool; 
+
+enum {
+	false = 0,
+	true = 1
+};
+
+struct config_entry {
+	char *key;
+	char *val;
+	int key_len;
+	int val_len;
+};
+
+extern struct config_entry *ptConfigTable;
+extern int nConfigNbr;
+extern bool bConfigReady;
+extern int *exclude_list; 
+extern int exclude_cnt;
+
 extern float temp_avg_floor;
 extern float temp_avg_ceiling;
 
@@ -44,5 +64,13 @@ extern int exclude[MAX_EXCLUDE];	// array of sensors to exclude
 
 #define max(a,b)	((a) > (b) ? (a) : (b))
 #define min(a,b)	((a) < (b) ? (a) : (b))
+
+bool strtoi(char *val_str, int *val);
+void read_cfg_file(char *filename); 
+char* find_cfg_str(const char *search_key);
+int find_cfg_strlen(const char *search_key);
+bool find_cfg_int(const char *search_key, int *cfg_val);
+bool build_exclude_list(char *val_excl, int val_len);
+
 
 #endif /* CONFIG_H_ */

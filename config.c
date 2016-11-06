@@ -16,14 +16,40 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <errno.h>
 #include <string.h>
 #include <ctype.h>
 #include "config.h"
 
-//-----------------------------------------------------------------------------
 
-static FILE *fp;
+/* Global Vars */
 
+
+/* About Structures 
+ *
+ *  ptConfigTable and exclude_list are allocated in the heap
+ *
+ *  they must be freed when they are done being used or are being
+ *  updated.
+ *
+ *  exclude_list is realloc()'ed when updated, so no problem there during
+ *    reload
+ *
+ *  ptConfigTable is just a ptr to an array to a bunch of dynamically 
+ *    allocated strings this means the obj.key and obj.val pointers must 
+ *    be free()'ed prior to other addEntry to avoid duplicates.
+ *
+ */
+
+struct config_entry *ptConfigTable = 0;
+int nConfigNbr = 0;
+bool bConfigReady = false;
+int *exclude_list = 0; // array of sensors to exclude
+int exclude_cnt = 0;
+
+// default variables
+// TODO: check these against the actual defaults in code later
 float temp_avg_floor = 40;		// default values if no config file is found
 float temp_avg_ceiling = 50;
 
@@ -40,63 +66,299 @@ float temp_TG0P_ceiling = 50;
 float fan_min = 0;
 float fan_max = 6200;			// fixed max value
 
+// aux control variables
 int log_level = 0;
+int update_time = 5; // seconds
 
-int exclude[MAX_EXCLUDE];		// array of sensors to exclude
 
-int update_time = 5;
+/* Prototypes */
+static bool addEntry(struct config_entry *next);
+static bool makeNewEntry(struct config_entry *entry, char *buf, int len);
+static bool readConfigTable(FILE *fd);
+
+/* Implementations */
 
 //-----------------------------------------------------------------------------
+static bool addEntry(struct config_entry *next) {
+	// add new entry	
+	struct config_entry *tmpEntry = realloc(ptConfigTable, 
+			(nConfigNbr+1)*sizeof(struct config_entry));
 
-int match(char* name, char* buf)
-{
-	char* start = buf;
-	char* end = buf;
-
-	if(strlen(buf) < 1)
-	{
-		return 0;
+	if (!tmpEntry) {
+		printf("realloc failed\n");
+		return false;
 	}
 
-	// skip preceeding ws
-	while(*start && isblank(*start))
-	{
-		++start;
-	}
+	ptConfigTable = tmpEntry;
 
-	// skip to end
-	while(*end)
-	{
-		++end;
-	}
+	// make deep copy
+	memcpy(&ptConfigTable[nConfigNbr], next, sizeof(struct config_entry));
+	nConfigNbr++;
 
-	// delete ws backwards from end
-	while(end > start && isblank(*end))
-	{
-		*end = 0;
-		--end;
-	}
-
-	// compare strings
-
-	return strcmp(name, start) == 0;
+	return true;
 }
 
 //-----------------------------------------------------------------------------
+//TODO: pretty sure we can strtok_r this
+static bool makeNewEntry(struct config_entry *entry, char *buf, int len) {
 
-int get_val(char *buf)
-{
-	while(isblank(*buf))
-	{
-		++buf;
+	int key_s, key_len, val_s, val_len;
+	char *key_ptr, *val_ptr; // in the source buf must make deep copy
+	char *ptr;
+	char *colon = strchr(buf, ':');	// find colon
+
+	// filter out comments and blank lines
+	if ((buf[0] == '#') || (buf[0] == '\n'))
+		return false;
+
+	// check if valid kv pair (must contain ':')
+	if (colon == 0) {
+		printf("Ill formed line in config file: %s\n", buf);
+		return false;
 	}
 
-	if(! *buf)
-	{
-		return -1;
+	//
+	// extract key
+	//
+	
+	// walk to first non-blank
+	key_s = 0;
+	ptr = buf;
+	while (isblank(*ptr++))
+		key_s++;
+	key_ptr = ptr-1;
+
+	key_len = colon - key_ptr; 
+
+	// deblank the end
+	ptr = key_ptr + key_len - 1;
+	while (isblank(*ptr--))
+		key_len--;
+
+	//
+	// extract value
+	// 
+	
+	val_s = colon+1 - buf;
+	ptr = colon+1;
+	// walk after the colon until first nonblank
+	while (isblank(*ptr++))
+		val_s++;
+	val_ptr = ptr-1;
+
+	// NOTE: this is index not ptr math
+	val_len = len - val_s; 
+
+	// deblank the end
+	ptr = val_ptr + val_len - 1;
+	while ( (isblank(*ptr)) || 
+			(*ptr=='\n') ||
+		 	(*ptr=='\r') ) {
+		val_len--;
+		ptr--;
 	}
 
-	return atoi(buf);
+
+	if ((key_len > len) || (key_len<=0) ){ /*||
+		(val_len > len) || (val_len <=0)) { */
+		printf("Bad length in extraction: k:%d v:%d\n\tstr: [%s]\n",
+			key_len, val_len, buf);
+		return false;
+	}
+
+
+	// DEBUG, mind the newline in buf
+	//printf("extraction: k:%d v:%d\n\tstr: [%s]\n",
+	//	key_len, val_len, buf);
+
+	//
+	// do deep copy
+	//
+
+	entry->key_len = key_len;
+	entry->val_len = val_len;
+
+	entry->key = malloc(key_len+1);
+	entry->val = malloc(val_len+1);
+	memcpy(entry->key, key_ptr, key_len);
+	memcpy(entry->val, val_ptr, val_len);
+	// force terminating zero
+	entry->key[key_len] = 0;
+	entry->val[val_len] = 0;
+
+	return true;
+}
+
+static void flushConfigTable() {
+	int n =0;
+	
+	// NOTE: when we restart, we must flush the entire ptConfigTable
+	//        that means go thru each entry and free the key,val
+	//        but we don't have to free the entry since we will
+	//        be realloc()'ed and extra space occupied is not a big problem
+
+	for (n = 0; n < nConfigNbr; n++) {
+		if (ptConfigTable[n].key) free(ptConfigTable[n].key);
+		if (ptConfigTable[n].val) free(ptConfigTable[n].val);
+	}
+	nConfigNbr = 0;
+}
+
+//-----------------------------------------------------------------------------
+static bool readConfigTable(FILE *fd) {
+
+	bool bSuccess = true;
+	char *lineptr = 0;
+	size_t linebuflen = 0;
+	int linelen = 0;
+	struct config_entry new_item;
+
+	// when we reload, we must flush/free the table elements
+	// don't necessarily have to free the main table since
+	// addEntry will realloc() for space.
+	flushConfigTable();
+
+	while (!feof(fd)) {
+
+		// clear buffer to ensure no stale data in next round
+		if (linelen>0)
+			memset(lineptr, 0, linelen);
+
+		// getline reallocs the same buffer, so just free once is fine
+		// but do remember to clear the lineptr bu linelen char each time
+		// to prevent stale data
+		if ((linelen = getline(&lineptr, &linebuflen, fd)) > 0) {
+
+			// extract key, value pair
+			// if valid: 
+			//   new_item will now have deep copy content of line
+			//   now we can free/reuse lineptr
+			if (!makeNewEntry(&new_item, lineptr, linelen))
+				continue;
+
+			// if all goes well, add to table
+			//   addEntry will make copy of the new entry
+			//   now we can let the new item be popped off stack/zero'ed
+			if (!addEntry(&new_item)) {
+				bSuccess = false;
+				break;
+			}
+
+			// clean up after use
+			memset(&new_item, 0, sizeof(struct config_entry));
+		}
+	}
+
+	free(lineptr);
+	linelen = 0;
+	linebuflen = 0;
+
+	return bSuccess;
+}
+
+//-----------------------------------------------------------------------------
+void read_cfg_file(char *filename) {
+
+	FILE *fd = fopen(filename, "r");
+	if (!fd) {
+		printf("Invalid file handle\n");
+		exit(-1);
+	}
+	if (!readConfigTable(fd)) {
+		printf("Error reading config file, quitting now\n");
+		exit(-1);
+	}
+
+	bConfigReady = true;
+
+	fclose(fd);
+}
+
+//-----------------------------------------------------------------------------
+char* find_cfg_str(const char *search_key) {
+
+	int n =0;
+	bool bFound = false;
+
+	if (!bConfigReady)
+		return NULL;
+	
+	for (n=0; n<nConfigNbr; n++) {
+		// if search_key is larger than the current, just fail
+		if (strncmp(ptConfigTable[n].key, search_key, 
+					ptConfigTable[n].key_len) == 0) {
+			bFound = true;
+			break;
+		}
+	}
+
+	if (bFound) {
+		return ptConfigTable[n].val;
+	} else {
+		return NULL;
+	}
+}
+
+int find_cfg_strlen(const char *search_key) {
+
+	int n =0;
+	bool bFound = false;
+
+	if (!bConfigReady) {
+		return 0;
+	}
+
+	for (n=0; n<nConfigNbr; n++) {
+		// if search_key is larger than the current, just fail
+		if (strncmp(ptConfigTable[n].key, search_key, 
+					ptConfigTable[n].key_len) == 0) {
+			bFound = true;
+			break;
+		}
+	}
+
+	if (bFound) {
+		return ptConfigTable[n].val_len;
+	} else {
+		return 0;
+	}
+}
+
+bool strtoi(char *val_str, int *val) {
+
+	long raw_val;
+	char *endptr = 0;
+
+	raw_val = strtol(val_str, &endptr, 10);
+
+	if (
+		((errno == ERANGE) && (raw_val == LONG_MAX || raw_val == LONG_MIN)) ||
+		(errno != 0 && raw_val==0)
+	) {
+		// overflow/underflow
+		return false;
+	}
+
+	if (endptr == val_str) {
+		// no digits
+		return false;
+	}
+
+	// cap back to 32-bits
+	*val = (int) raw_val & INT_MAX ;
+
+	return true;
+}
+
+
+//-----------------------------------------------------------------------------
+bool find_cfg_int(const char *search_key, int *cfg_val) {
+
+	char *val_str = find_cfg_str(search_key);
+	if ((!val_str) || (!cfg_val))
+		return false;
+
+	return strtoi(val_str, cfg_val);
 }
 
 //-----------------------------------------------------------------------------
@@ -104,137 +366,67 @@ int get_val(char *buf)
 
 int read_param(char* name, int min_val, int max_val, int def)
 {
-	fseek(fp, 0, SEEK_SET);
+	int val;
 
-	while(1)
-	{
-		char buf[256]; /* TODO: long lines not handled properly this way */
-		char *s = fgets(buf, sizeof(buf), fp);
-
-
-		if(s == NULL)
-		{
-			break;						// exit when no more to read
-		}
-
-		if (buf[255] != '\n') 
-		{
-			printf("warning, long lines found, please fix config file\n");
-		}
-
-		if(buf[0] == '#' || buf[0] == '\n')
-		{
-			continue;					// skip comments
-		}
-
-		char *colon = strchr(buf, ':');	// find colon
-		if(colon == NULL)
-		{
-			printf("Ill formed line in config file: %s\n", buf);
-			continue;
-		}
-
-		*colon = 0;						// terminate string at colon
-
-		if(match(name, buf))
-		{
-			int val = get_val(colon + 1);	// get value
-
-			if(val < 0)
-			{
-				printf("Ill formed line in config file: %s\n", buf);
-				continue;
-			}
-			else
-			{
-				val = min(max_val, val);// clamp
-				val = max(min_val, val);
-				return val;				// success
-			}
-		}
+	if (!find_cfg_int(name, &val)) {
+		// not found, use default
+		val = def;
 	}
 
-	return def;
+	// always clamp (maybe default can be wrong)
+	val = min(max_val, val);
+	val = max(min_val, val);
+
+	return val;
 }
 
 //-----------------------------------------------------------------------------
-// format is: exclude : integer {integer}
+bool build_exclude_list(char *val_excl, int val_len) {
 
+	char *saveptr, *token;
+	int tmpInt, *tmpList;
+	char *val_excl_wip = malloc(val_len);
+	bool bSuccess = true;
+
+	// strtok will destroy the original string, make working copy
+	memcpy(val_excl_wip, val_excl, val_len);
+	exclude_cnt = 0; /* reset the list count */
+
+	do {
+		token = strtok_r((exclude_cnt ? NULL : val_excl_wip), " \t", &saveptr);
+		
+		//DEBUG:
+		//printf("token: %s\n", token);
+
+		if (token && strtoi(token, &tmpInt)) {
+			tmpList = realloc(exclude_list, sizeof(int)*(exclude_cnt+1));
+			if (!tmpList) {
+				// realloc failed, out of memory?
+				bSuccess = false;
+				break;
+			}
+
+			exclude_list = tmpList;
+			exclude_list[exclude_cnt] = tmpInt;
+			exclude_cnt ++;
+		}
+	} while (token != NULL);
+
+	free(val_excl_wip);
+
+	return bSuccess;
+
+}
+
+//-----------------------------------------------------------------------------
 void read_exclude_list()
 {
-	fseek(fp, 0, SEEK_SET);
-
-	while(1)
-	{
-		char buf[1024];
-		char *s = fgets(buf, sizeof(buf), fp);
-
-		if(s == NULL)
-		{
-			break;						// exit when no more to read
-		}
-
-		if (buf[255] != '\n') 
-		{
-			printf("warning, long lines found, please fix config file\n");
-		}
-
-		if(buf[0] == '#' || buf[0] == '\n')
-		{
-			continue;					// skip comments
-		}
-
-		char *colon = strchr(buf, ':');	// find colon
-		if(colon == NULL)
-		{
-			printf("Ill formed line in config file: %s\n", buf);
-			continue;
-		}
-
-		*colon = 0;						// terminate string at colon
-
-		if(match("exclude", buf))
-		{
-			int i;
-			char* values = colon + 1;
-		
-			// get values
-
-			for(i = 0; i < MAX_EXCLUDE; ++i)
-			{
-				while(isspace(*values) || *values == ',')
-				{
-					++values;
-				}
-				
-				if(isdigit(*values))
-				{
-					int val = get_val(values);
-					
-					if(val < 0)
-					{
-						printf("Ill formed line in config file: %s\n", buf);
-						return;
-					}
-					
-					exclude[i] = val;
-					
-					while(isdigit(*values))
-					{
-						++values;
-					}
-				}
-				else if(*values == 0)
-				{
-					return;		// done
-				}
-				else
-				{
-					printf("Malformed line in config file: %s\n", buf);
-					return;
-				}
-			}
-		}
+	char *val_excl = 0;
+	// find the entry and then build a dynamic list
+	if ((val_excl = find_cfg_str("exclude"))) {
+		build_exclude_list(val_excl, find_cfg_strlen("exclude"));
+	} else {
+		printf("No exclusion list specified\n");
 	}
 }
  
@@ -242,12 +434,18 @@ void read_exclude_list()
 
 void read_cfg(char* name)
 {
-	memset(exclude, 0, sizeof(exclude));
+	int i = 0;
 
-	fp = fopen(name, "r");
+	read_cfg_file(name);
 
-	if(fp != NULL)
+	if(bConfigReady)
 	{
+		// TODO: min_val=0 is that realistic? or max_val=90 is that realistic?
+		//       most system will be >25C and anything beyond 75-80C will probably fry the chips
+		//       so why are we using these lowball values?
+		//
+		// TODO2: are these def values the same as the ones at the top?
+		//
 		temp_avg_ceiling = read_param("temp_avg_ceiling",	0, 90, 50);
 		temp_avg_floor = read_param("temp_avg_floor", 		0, temp_avg_ceiling - 1, 40);
 
@@ -269,11 +467,11 @@ void read_cfg(char* name)
 		
 		read_exclude_list();
 
-		fclose(fp);
 	}
 	else
 	{
-		printf("Could not open config file %s\n", name);
+		printf("Could not open config file %s\n"
+			   "Existing settings will be used\n", name);
 	}
 
 	printf("Using parameters:\n");
@@ -293,22 +491,15 @@ void read_cfg(char* name)
 
 	printf("\tfan_min: %.0f\n", fan_min);
 
-	printf("\tupdate_time: %d\n", update_time);
-
-	if(exclude[0] != 0)
-	{
-		int i;
-
-		printf("\texclude: ");
-
-		for(i = 0; i < MAX_EXCLUDE && exclude[i] != 0; ++i)
-		{
-			printf("temp%d_input ", exclude[i]);
-		}
-		printf("\n");
+	printf("\texclude: ");
+	for (i=0; i<exclude_cnt; i++) {
+		printf("temp%d_input ", exclude_list[i]);
 	}
+	printf("\n");
 	
 	printf("\tlog_level: %d\n", log_level);
+	printf("\tupdate_time: %d\n", update_time);
 }
 
 //-----------------------------------------------------------------------------
+
