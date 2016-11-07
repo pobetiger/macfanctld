@@ -43,9 +43,9 @@ clean:
 install:
 	chmod +x macfanctld
 	cp macfanctld $(SBIN_DIR)
-	[[ ! -f $(ETC_DIR)/macfanctl.conf ]] && \
+	$(shell [[ ! -f $(ETC_DIR)/macfanctl.conf ]] && \
 		cp macfanctl.conf $(ETC_DIR) && ] \
-		echo -e "*** install default macfanctl.conf file ***"
+		echo -e "*** install default macfanctl.conf file ***")
 
 uninstall:
 	rm $(SBIN_DIR)/macfanctld $(INITD_DIR)/macfanctl 
