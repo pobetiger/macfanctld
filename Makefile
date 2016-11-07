@@ -43,10 +43,12 @@ clean:
 install:
 	chmod +x macfanctld
 	cp macfanctld $(SBIN_DIR)
-	cp macfanctl.conf $(ETC_DIR)
+	[[ ! -f $(ETC_DIR)/macfanctl.conf ]] && \
+		cp macfanctl.conf $(ETC_DIR) && ] \
+		echo -e "*** install default macfanctl.conf file ***"
 
 uninstall:
-	rm $(SBIN_DIR)/macfanctld $(INITD_DIR)/macfanctl $(ETC_DIR)/macfanctl.conf
+	rm $(SBIN_DIR)/macfanctld $(INITD_DIR)/macfanctl 
 
 install-systemd:
 	cp macfanctld.systemd.service /etc/systemd/system/macfanctld.service
@@ -56,7 +58,9 @@ uninstall-systemd:
 
 install-all: install install-systemd
 
+# only remove conf file when doing uninstall-all
 uninstall-all: uninstall uninstall-systemd
+	rm $(ETC_DIR)/macfanctl.conf
 
 .PHONY: clean install uninstall install-all uninstall-systemd install-systemd uninstall-all
 
