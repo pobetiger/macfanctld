@@ -19,6 +19,9 @@
  *
  */
 
+#include <iostream>
+
+extern "C" {
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,6 +34,7 @@
 
 #include "control.h"
 #include "config.h"
+};
 
 //------------------------------------------------------------------------------
 

@@ -5,8 +5,11 @@
 # Ben Sung Hsu, Nov 2016
 #
 
-CC = gcc
+CC = gcc -xc -c
+LD = g++
+CXX = g++ -c
 CFLAGS += -Wall
+CXXFLAGS += -std=c++17 -Wall
 SBIN_DIR = $(DESTDIR)/usr/sbin
 ETC_DIR = $(DESTDIR)/etc
 
@@ -15,27 +18,33 @@ ifeq ($(DEBUG),1)
 	CFLAGS += -g
 endif
 
-SRC += macfanctl.c \
-	   control.c \
-	   config.c 
+SRC += macfanctl.cc
+SRC += control.c
+SRC += config.c 
 
 TEST_SRC += test-readconfig.c \
 			config.c
 
-OBJ := $(SRC:%.c=%.o)
+OBJ_1 := $(SRC:%.c=%.o)
+OBJ   := $(OBJ_1:%.cc=%.o)
 
-OBJ_TEST := $(TEST_SRC:%.c=%.o)
+OBJ_TEST_1 := $(TEST_SRC:%.c=%.o)
+OBJ_TEST := $(OBJ_TEST_1:%.cc=%.o)
 
 
 # Build Targets
 
 all: macfanctld test-readconfig
 
+show:
+	$(ECHO) "target: $(OBJ_1)"
+
+
 macfanctld: $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(LD) $(CFLAGS) -o $@ $(OBJ)
 
 test-readconfig: $(OBJ_TEST)
-	$(CC) $(CFLAGS) -o $@ $^
+	$(LD) $(CFLAGS) -o $@ $(OBJ_TEST)
 
 clean:
 	rm -rf *.o macfanctld test-readconfig
@@ -67,6 +76,10 @@ uninstall-all: uninstall uninstall-systemd
 
 # Build Rules
 
-.o : .c
-	$(CC) $(CFLAGS) -o $@ $^
+.c.o:
+	$(CC) $(CFLAGS) -o $@ $<
+
+.cc.o:
+	$(CXX) $(CXXFlAGS) -o $@ $<
+
 

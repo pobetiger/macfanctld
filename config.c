@@ -257,7 +257,7 @@ static bool readConfigTable(FILE *fd) {
 }
 
 //-----------------------------------------------------------------------------
-void read_cfg_file(char *filename) {
+void read_cfg_file(char const *filename) {
 
 	FILE *fd = fopen(filename, "r");
 	if (!fd) {
@@ -432,7 +432,7 @@ void read_exclude_list()
  
 //-----------------------------------------------------------------------------
 
-void read_cfg(char* name)
+void read_cfg(char const* name)
 {
 	int i = 0;
 

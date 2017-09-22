@@ -17,12 +17,14 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
+#if !__cplusplus
 typedef int bool; 
 
 enum {
 	false = 0,
 	true = 1
 };
+#endif
 
 struct config_entry {
 	char *key;
@@ -57,7 +59,7 @@ extern int update_time;
 
 extern int log_level;
 
-void read_cfg(char* name);
+void read_cfg(char const * name);
 
 #define MAX_EXCLUDE		200
 extern int exclude[MAX_EXCLUDE];	// array of sensors to exclude
@@ -66,7 +68,7 @@ extern int exclude[MAX_EXCLUDE];	// array of sensors to exclude
 #define min(a,b)	((a) < (b) ? (a) : (b))
 
 bool strtoi(char *val_str, int *val);
-void read_cfg_file(char *filename); 
+void read_cfg_file(char const *filename); 
 char* find_cfg_str(const char *search_key);
 int find_cfg_strlen(const char *search_key);
 bool find_cfg_int(const char *search_key, int *cfg_val);
