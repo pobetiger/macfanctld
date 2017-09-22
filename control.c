@@ -241,14 +241,19 @@ void read_sensors()
 
 void calc_fan()
 {
-	fan_speed = fan_min;
+	fan_speed = fan_min; // always go back to min?
 	fan_ctl = CTL_NONE;
 
 	// calc fan speed on average
+	//  avg_speed = percentage of how close we are to the ceiling
+	//              multiplied by the full range of fan speed
+	//  fan_max = 6200 (this seems to be hardcoded constant)
 
-	float fan_window = fan_max - fan_min;
-	float temp_avg_window = temp_avg_ceiling - temp_avg_floor;
+	float fan_window = fan_max - fan_min; // rpms
+	float temp_avg_window = temp_avg_ceiling - temp_avg_floor; // temperature
+	// effectively the percentage of reaching the ceiling
 	float normalized_temp =(temp_avg - temp_avg_floor) / temp_avg_window;
+	// scales the fan speed using the percentage
 	float fan_avg_speed =(normalized_temp * fan_window);
 	if(fan_avg_speed > fan_speed)
 	{
@@ -257,6 +262,10 @@ void calc_fan()
 	}
 
 	// calc fan speed for max
+	//  when sensors report temperature in this range
+	//  specified by temp_max_floor < temp < temp_max_ceiling
+	//  the fan speed is thresholded at temp_max_fan_min
+	//  in addition to a percentage of how close we are to the ceiling
 
 	float temp_max_fan_window = fan_max - temp_max_fan_min;
 	float temp_max_window = temp_max_ceiling - temp_max_floor;
