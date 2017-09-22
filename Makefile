@@ -19,6 +19,7 @@ ifeq ($(DEBUG),1)
 endif
 
 SRC += macfanctl.cc
+SRC += daemonize.c
 SRC += control.c
 SRC += config.c 
 

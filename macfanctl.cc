@@ -20,27 +20,23 @@
  */
 
 #include <iostream>
+#include <vector>
 
 extern "C" {
 #include <unistd.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/time.h>
-#include <fcntl.h>
 #include <signal.h>
 
 #include "control.h"
 #include "config.h"
+extern void daemonize();
 };
 
-//------------------------------------------------------------------------------
+#include "macfanctl.h"
 
-#define PID_FILE	"/var/run/macfanctld.pid"
-#define LOG_FILE	"/var/log/macfanctl.log"
-#define CFG_FILE	"/etc/macfanctl.conf"
+//------------------------------------------------------------------------------
 
 int running = 1;
 int lock_fd = -1;
@@ -64,63 +60,23 @@ void signal_handler(int sig)
 
 //-----------------------------------------------------------------------------
 
-void daemonize()
-{
-	if (getppid() == 1)
-		return; // already a daemon
-
-	// fork of new process
-	pid_t pid = fork();
-
-	if(pid < 0)
-		exit(1); 		// fork error
-
-	if(pid > 0)
-		exit(0);		// parent exits
-
-	// child (daemon) continues
-
-#ifdef DEBUG
-	sleep(20);			// time to attach debugger to this process
-#endif
-
-	setsid(); 			// create a new session
-
-#ifdef DEBUG
-	umask(0);
-#else
-	umask(022); // set createfile permissions
-#endif
-
-	freopen(LOG_FILE, "w", stdout);
-	freopen("/dev/null", "r", stdin);
-
-	chdir("/");
-
-	// create lockfile
-	int lock_fd = open(PID_FILE, O_RDWR | O_CREAT, 0640);
-
-	if(lock_fd < 0)
-		exit(1); 		// open failed, we're a duplicate
-
-	if(lockf(lock_fd, F_TLOCK, 0) < 0)
-		exit(0); 		// lock failed - no idea what this means...
-
-	// first instance continues...
-	// write pid to file, and leave file open (blocking duplicates)
-
-	char str[32];
-	sprintf(str, "%d\n", getpid());
-	write(lock_fd, str, strlen(str));
-}
-
-//-----------------------------------------------------------------------------
-
 void usage()
 {
-	printf("usage: macfanctld [-f]\n");
-	printf("  -f  run in foregound\n");
+	std::cout << "usage: macfanctld [-f]\n"
+			     "       -f  run in foregound\n";
 	exit(-1);
+}
+
+void setup_sighandler()
+{
+	// setup daemon
+	signal(SIGCHLD, SIG_IGN); 			// ignore child
+	signal(SIGTSTP, SIG_IGN); 			// ignore tty signals
+	signal(SIGTTOU, SIG_IGN);
+	signal(SIGTTIN, SIG_IGN);
+	signal(SIGINT, signal_handler); 	// catch Ctrl-C signal (terminating in foreground mode)
+	signal(SIGHUP, signal_handler); 	// catch hangup signal (reload config)
+	signal(SIGTERM, signal_handler); 	// catch kill signal
 }
 
 //-----------------------------------------------------------------------------
@@ -130,24 +86,18 @@ int main(int argc, char *argv[])
 	int i;
 	int daemon = 1;
 
-	// setup daemon
-	signal(SIGCHLD, SIG_IGN); 			// ignore child
-	signal(SIGTSTP, SIG_IGN); 			// ignore tty signals
-	signal(SIGTTOU, SIG_IGN);
-	signal(SIGTTIN, SIG_IGN);
-	signal(SIGINT, signal_handler); 	// catch Ctrl-C signal (terminating in foreground mode)
-	signal(SIGHUP, signal_handler); 	// catch hangup signal (reload config)
-	signal(SIGTERM, signal_handler); 	// catch kill signal
+	setup_sighandler();
 
-	for(i = 1; i < argc; ++i)
+	int opt;
+	while ((opt = getopt(argc, argv, "f")) != -1)
 	{
-		if(strcmp(argv[i], "-f") == 0)
-		{
-			daemon = 0;
-		}		
-		else
-		{
-			usage();
+		switch(opt) {
+			case 'f':
+				daemon = 0;
+				break;
+			default:
+				usage();
+				break;
 		}
 	}
 
@@ -157,7 +107,7 @@ int main(int argc, char *argv[])
 	}
 	else
 	{
-		printf("Running in foreground, log to stdout.\n");
+		std::cout << "Running in foreground, log to stdout.\n";
 	}
 
 	// main loop
@@ -192,7 +142,7 @@ int main(int argc, char *argv[])
 		unlink(PID_FILE);
 	}
 
-	printf("Exiting.\n");
+	std::cout << "Exiting.\n";
 
 	return 0;
 }
